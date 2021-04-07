@@ -11,7 +11,6 @@ import math
 
 
 eth = 1e18
-TOTAL_SUPPLY = 512
 nft_activity = defaultdict(list)
 buckets = defaultdict(lambda: defaultdict(int))  # funky eh?
 FORMAT_MAIN = '%Y-%m-%dT%H:%M:%S.%f'
@@ -81,12 +80,14 @@ def create_nft_event(jjj, i, asset_type, coingecko):
             else:
                 price = price * eth_conversion_ratio
 
+        if event_type == 'created' and not price:
+            return
         nft_activity[asset_id].append({
             'id': jjj['asset_events'][i]['id'],
             'when': when,
             'token_id': asset_id,
             'event': event_type,
-            'price': price,
+            'price': price if price else 0,
             # 'url': jjj['asset_events'][i][asset_type]['permalink'],
         })
         nft_activity[asset_id].sort(key=lambda d: d['when'])
@@ -94,7 +95,10 @@ def create_nft_event(jjj, i, asset_type, coingecko):
         when = when.strftime('%b %d, %Y')
         if event_type == 'successful':
             buckets[when]['sales'] += 1
-            buckets[when]['volume'] += price
+            if price:
+                buckets[when]['volume'] += price
+            else:
+                buckets[when]['volume'] += 0
     else:
         print("Duplicate event %s" % jjj['asset_events'][i]['id'])
 
@@ -131,7 +135,7 @@ def opensea_data(argv):
         last_sold_event = -1
         last_cancelled_event = -1
         last_transferred_event = -1
-        list_price = 0
+        list_price = 0.0
         for e in events:
             if e['event'] == 'created':
                 last_list_event = events.index(e)
@@ -153,14 +157,16 @@ def opensea_data(argv):
     secondary_sales = 0
     secondary_sale_price = []
     for events in nft_activity.values():
-        num_sales = len([e for e in events if e['event'] == 'successful'])
+        num_sales = len([e for e in events if e['event'] == 'successful' and e['price'] > 0])
         if num_sales == 0:
             primary_sales += 1  # no data here. need to fetch events
         elif num_sales == 1:
             single_sale += 1
-            single_sale_price.append([e['price'] for e in events if e['event'] == 'successful'][0])
+            sngls = [e['price'] for e in events if e['event'] == 'successful' and e['price'] > 0]
+            if len(sngls) > 0:
+                single_sale_price.append(sngls[0])
         else:
-            secondary = [e['price'] for e in events if e['event'] == 'successful']
+            secondary = [e['price'] for e in events if e['event'] == 'successful' and e['price'] > 0]
             secondary_sales += 1
             secondary_sale_price.extend(secondary[1:])
 
@@ -170,11 +176,11 @@ def opensea_data(argv):
     # print("%d tokens never traded" % len(never_traded))
     print("%d tokens currently on sale" % currently_on_sale)
     print("on-sale min price: %f" % np.min(listed_prices))
-    print("on-sale avg price: %f" % np.average(listed_prices))
+    # print("on-sale avg price: %f" % np.average(listed_prices))
     print("on-sale 50 percentile: %f" % np.percentile(listed_prices, 50))
     print("on-sale 95 percentile: %f" % np.percentile(listed_prices, 90))
     print("on-sale 99 percentile: %f" % np.percentile(listed_prices, 99))
-    print("on-sale max: %f" % np.max(listed_prices))
+    # print("on-sale max: %f" % np.max(listed_prices))
 
     print("primary market: %d items" % primary_sales)
     print("single sale: %d items" % single_sale)
