@@ -7,16 +7,17 @@ import csv
 import sys
 import requests
 import numpy as np
+import math
 
 
 eth = 1e18
 TOTAL_SUPPLY = 512
-total_tokens = {'count': 0}
 nft_activity = defaultdict(list)
 buckets = defaultdict(lambda: defaultdict(int))  # funky eh?
 FORMAT_MAIN = '%Y-%m-%dT%H:%M:%S.%f'
 FORMAT_ALT = '%Y-%m-%dT%H:%M:%S'
-custom_coins = {'DENA': 0.002567}  # not on coingecko as of 6.4.2021
+custom_coins = {'DENA': 0.002567,  # not on coingecko as of 6.4.2021
+                'USDC': 0.00049}
 
 
 def create_nft_event(jjj, i, asset_type, coingecko):
@@ -27,10 +28,6 @@ def create_nft_event(jjj, i, asset_type, coingecko):
     else:
         asset_id = '|'.join([a['token_id'] for a in jjj['asset_events'][i][asset_type]['assets']])
         # total_tokens['count'] += len(jjj['asset_events'][i][asset_type]['assets'])
-
-    # increment token count
-    if asset_id not in nft_activity.keys():
-        total_tokens['count'] += 1
 
     existing_ids = [x['id'] for x in nft_activity[asset_id]]
 
@@ -72,21 +69,17 @@ def create_nft_event(jjj, i, asset_type, coingecko):
                         custom_coins[currency] = eth_conversion_ratio
                     else:
                         print("Cannot convert %s to ETH. Skip this event" % currency)
-                        total_tokens['count'] -= 1
                         return
                 else:
                     eth_conversion_ratio = custom_coins[currency]
             except:
                 a = 1
         price = bid_amount if bid_amount else list_price if list_price else total_price if total_price else ending_price if ending_price else starting_price
-        if not price:
-            total_tokens['count'] -= 1
-            return
-
-        if eth_conversion_ratio != 1.0:
-            price = price * eth * eth_conversion_ratio
-        else:
-            price = price * eth_conversion_ratio
+        if price:
+            if eth_conversion_ratio != 1.0:
+                price = price * eth / math.pow(10, int(jjj['asset_events'][i]['payment_token']['decimals'])) * eth_conversion_ratio
+            else:
+                price = price * eth_conversion_ratio
 
         nft_activity[asset_id].append({
             'id': jjj['asset_events'][i]['id'],
