@@ -1,132 +1,33 @@
 # Usage python3 opensea.py /Users/o.buistov/projects/crypto/opensea-analytics/new/*.json cryptopunk.csv
-import json
-import glob
-from collections import defaultdict
-from datetime import datetime
 import csv
 import sys
-import requests
+from collections import defaultdict
+from datetime import datetime
 import numpy as np
-import math
+from db_models import *
+from bson import json_util
+import json
+from playhouse.shortcuts import model_to_dict, dict_to_model
 
-
-eth = 1e18
 nft_activity = defaultdict(list)
 buckets = defaultdict(lambda: defaultdict(int))  # funky eh?
-FORMAT_MAIN = '%Y-%m-%dT%H:%M:%S.%f'
-FORMAT_ALT = '%Y-%m-%dT%H:%M:%S'
-custom_coins = {'DENA': 0.002567,  # not on coingecko as of 6.4.2021
-                'USDC': 0.00049}
-
-
-def create_nft_event(jjj, i, asset_type, coingecko):
-
-    if 'token_id' in jjj['asset_events'][i][asset_type]:
-        asset_id = jjj['asset_events'][i][asset_type]['token_id']
-        # total_tokens['count'] += 1
-    else:
-        asset_id = '|'.join([a['token_id'] for a in jjj['asset_events'][i][asset_type]['assets']])
-        # total_tokens['count'] += len(jjj['asset_events'][i][asset_type]['assets'])
-
-    existing_ids = [x['id'] for x in nft_activity[asset_id]]
-
-    if jjj['asset_events'][i]['id'] not in existing_ids:
-
-        try:
-            when = datetime.strptime(jjj['asset_events'][i]['created_date'], FORMAT_MAIN)
-        except:
-            when = datetime.strptime(jjj['asset_events'][i]['created_date'], FORMAT_ALT)
-        event_type = jjj['asset_events'][i]['event_type']
-        bid_amount = int(jjj['asset_events'][i]['bid_amount']) / eth if isinstance(
-            jjj['asset_events'][i]['bid_amount'], str) else None
-        list_price = int(jjj['asset_events'][i]['ending_price']) / eth if isinstance(
-            jjj['asset_events'][i]['ending_price'], str) else None
-        total_price = int(jjj['asset_events'][i]['total_price']) / eth if isinstance(
-            jjj['asset_events'][i]['total_price'], str) else None
-        ending_price = int(jjj['asset_events'][i]['ending_price']) / eth if isinstance(
-            jjj['asset_events'][i]['ending_price'], str) else None
-        starting_price = int(jjj['asset_events'][i]['starting_price']) / eth if isinstance(
-            jjj['asset_events'][i]['starting_price'], str) else None
-
-        # the following code checks if the token was listed in other coins (not ETH) and tries to convert the price
-        # (the conversion is not accurate because it is done using CoinGecko data as of today
-        eth_conversion_ratio = 1.0
-        try:
-            eth_conversion_ratio = float(jjj['asset_events'][i]['payment_token']['eth_price'])
-        except:
-            try:
-                currency = jjj['asset_events'][i]['payment_token']['symbol']
-                coingecko_id = None
-                if currency not in custom_coins:
-                    for coin in coingecko:
-                        if coin['symbol'].upper() == currency or coin['symbol'].upper() == currency[:-1]:
-                            coingecko_id = coin['id']
-                            break
-                    if coingecko_id:
-                        url = f'https://api.coingecko.com/api/v3/simple/price?ids=%s&vs_currencies=ETH' % coingecko_id
-                        eth_conversion_ratio = requests.get(url).json()[coingecko_id]['eth']
-                        custom_coins[currency] = eth_conversion_ratio
-                    else:
-                        print("Cannot convert %s to ETH. Skip this event" % currency)
-                        return
-                else:
-                    eth_conversion_ratio = custom_coins[currency]
-            except:
-                a = 1
-        price = bid_amount if bid_amount else list_price if list_price else total_price if total_price else ending_price if ending_price else starting_price
-        if price:
-            if eth_conversion_ratio != 1.0:
-                price = price * eth / math.pow(10, int(jjj['asset_events'][i]['payment_token']['decimals'])) * eth_conversion_ratio
-            else:
-                price = price * eth_conversion_ratio
-
-        if event_type == 'created' and not price:
-            return
-        nft_activity[asset_id].append({
-            'id': jjj['asset_events'][i]['id'],
-            'when': when,
-            'token_id': asset_id,
-            'event': event_type,
-            'price': price if price else 0,
-            # 'url': jjj['asset_events'][i][asset_type]['permalink'],
-        })
-        nft_activity[asset_id].sort(key=lambda d: d['when'])
-
-        when = when.strftime('%b %d, %Y')
-        if event_type == 'successful':
-            buckets[when]['sales'] += 1
-            if price:
-                buckets[when]['volume'] += price
-            else:
-                buckets[when]['volume'] += 0
-    else:
-        print("Duplicate event %s" % jjj['asset_events'][i]['id'])
-
-    return True
 
 
 def opensea_data(argv):
 
-    print("Getting list of coins from Coingecko...")
-    coins = json.loads(requests.get('https://api.coingecko.com/api/v3/coins/list').text)
+    for record in OpenseaEvent.select():
+        nft_activity[record.token_id].append(model_to_dict(record))
+        if record.event_type == 'successful':
+            when = record.when.strftime('%b %d, %Y')
+            buckets[when]['sales'] += 1
+            if record.price:
+                buckets[when]['volume'] += record.price
+            else:
+                buckets[when]['volume'] += 0
 
-    c1 = 0
-    for g in list(glob.glob(argv[0])):
-        f = open(g, 'r')
-        try:
-            j = json.load(f)
-        except:
-            continue
-        if 'asset_events' not in j or j['asset_events'] == {}:
-            continue
-        for event in range(0, len(j['asset_events'])):
-            if j['asset_events'][event]['asset']:
-                c1 = c1 + 1
-                create_nft_event(j, event, 'asset', coins)
-            # elif 'asset_bundle' in j['asset_events'][event]:
-            #     print("todo")
-                # create_nft_event(j, event, 'asset_bundle', coins)
-        f.close()
+    # sort events by date.
+    for events in nft_activity.values():
+        events.sort(key=lambda d: d['when'])
 
     currently_on_sale = 0
     listed_prices = []
@@ -137,14 +38,14 @@ def opensea_data(argv):
         last_transferred_event = -1
         list_price = 0.0
         for e in events:
-            if e['event'] == 'created':
+            if e['event_type'] == 'created':
                 last_list_event = events.index(e)
                 list_price = e['price']
-            if e['event'] == 'cancelled':
+            if e['event_type'] == 'cancelled':
                 last_cancelled_event = events.index(e)
-            if e['event'] == 'successful':
+            if e['event_type'] == 'successful':
                 last_sold_event = events.index(e)
-            if e['event'] == 'transfer':
+            if e['event_type'] == 'transfer':
                 last_transferred_event = events.index(e)
 
         if last_list_event > last_sold_event and last_list_event > last_cancelled_event and last_list_event > last_transferred_event:
@@ -157,21 +58,21 @@ def opensea_data(argv):
     secondary_sales = 0
     secondary_sale_price = []
     for events in nft_activity.values():
-        num_sales = len([e for e in events if e['event'] == 'successful' and e['price'] > 0])
+        num_sales = len([e for e in events if e['event_type'] == 'successful' and e['price'] > 0])
         if num_sales == 0:
             primary_sales += 1  # no data here. need to fetch events
         elif num_sales == 1:
             single_sale += 1
-            sngls = [e['price'] for e in events if e['event'] == 'successful' and e['price'] > 0]
+            sngls = [e['price'] for e in events if e['event_type'] == 'successful' and e['price'] > 0]
             if len(sngls) > 0:
                 single_sale_price.append(sngls[0])
         else:
-            secondary = [e['price'] for e in events if e['event'] == 'successful' and e['price'] > 0]
+            secondary = [e['price'] for e in events if e['event_type'] == 'successful' and e['price'] > 0]
             secondary_sales += 1
             secondary_sale_price.extend(secondary[1:])
 
     print("Total tokens in dataset: %d" % len(nft_activity))
-    print("Total events in dataset: %d" % c1)
+    # print("Total events in dataset: %d" % c1)
     # never_traded = sorted(set(range(1, TOTAL_SUPPLY)).difference(set([int(x) for x in nft_activity.keys()])))
     # print("%d tokens never traded" % len(never_traded))
     print("%d tokens currently on sale" % currently_on_sale)
@@ -217,4 +118,4 @@ def opensea_data(argv):
 
 
 if __name__ == '__main__':
-    opensea_data(sys.argv[1:])
+    opensea_data(sys.argv)
