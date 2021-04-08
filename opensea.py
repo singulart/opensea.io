@@ -3,11 +3,11 @@ import csv
 import sys
 from collections import defaultdict
 from datetime import datetime
+
 import numpy as np
+from playhouse.shortcuts import model_to_dict
+
 from db_models import *
-from bson import json_util
-import json
-from playhouse.shortcuts import model_to_dict, dict_to_model
 
 nft_activity = defaultdict(list)
 buckets = defaultdict(lambda: defaultdict(int))  # funky eh?
@@ -15,7 +15,7 @@ buckets = defaultdict(lambda: defaultdict(int))  # funky eh?
 
 def opensea_data(argv):
 
-    for record in OpenseaEvent.select():
+    for record in OpenseaEvent.select().order_by(OpenseaEvent.token_id, OpenseaEvent.when.asc()):
         nft_activity[record.token_id].append(model_to_dict(record))
         if record.event_type == 'successful':
             when = record.when.strftime('%b %d, %Y')
@@ -24,10 +24,6 @@ def opensea_data(argv):
                 buckets[when]['volume'] += record.price
             else:
                 buckets[when]['volume'] += 0
-
-    # sort events by date.
-    for events in nft_activity.values():
-        events.sort(key=lambda d: d['when'])
 
     currently_on_sale = 0
     listed_prices = []
