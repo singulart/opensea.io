@@ -28,15 +28,15 @@ def ingest_nft_event(jjj, i, asset_type, coingecko):
     except:
         when = datetime.strptime(jjj['asset_events'][i]['created_date'], FORMAT_ALT)
     event_type = jjj['asset_events'][i]['event_type']
-    bid_amount = int(jjj['asset_events'][i]['bid_amount']) / eth if isinstance(
+    bid_amount = float(jjj['asset_events'][i]['bid_amount']) / eth if isinstance(
         jjj['asset_events'][i]['bid_amount'], str) else None
-    list_price = int(jjj['asset_events'][i]['ending_price']) / eth if isinstance(
+    list_price = float(jjj['asset_events'][i]['ending_price']) / eth if isinstance(
         jjj['asset_events'][i]['ending_price'], str) else None
-    total_price = int(jjj['asset_events'][i]['total_price']) / eth if isinstance(
+    total_price = float(jjj['asset_events'][i]['total_price']) / eth if isinstance(
         jjj['asset_events'][i]['total_price'], str) else None
-    ending_price = int(jjj['asset_events'][i]['ending_price']) / eth if isinstance(
+    ending_price = float(jjj['asset_events'][i]['ending_price']) / eth if isinstance(
         jjj['asset_events'][i]['ending_price'], str) else None
-    starting_price = int(jjj['asset_events'][i]['starting_price']) / eth if isinstance(
+    starting_price = float(jjj['asset_events'][i]['starting_price']) / eth if isinstance(
         jjj['asset_events'][i]['starting_price'], str) else None
     owner = ''
     if 'owner' in jjj['asset_events'][i][asset_type] and 'user' in jjj['asset_events'][i][asset_type]['owner']:

@@ -5,6 +5,7 @@ from random_dict import RandomDict
 from db_models import *
 from json import encoder
 import json
+from decimal import Decimal as D
 
 # only report seller losses greater than this percentage
 loss_threshold = 20
@@ -14,10 +15,10 @@ loss = defaultdict(list)
 encoder.FLOAT_REPR = lambda o: format(o, '.2f')
 
 
-class SetEncoder(json.JSONEncoder):
+class DecimalEncoder(json.JSONEncoder):
     def default(self, obj):
-        if isinstance(obj, set):
-            return list(obj)
+        if isinstance(obj, D):
+            return float(obj)
         return json.JSONEncoder.default(self, obj)
 
 
@@ -45,11 +46,11 @@ def opensea_data(argv):
                     loss_percentage = 100 - events[1][e].price / last_sold_price * 100
                     if loss_percentage >= loss_threshold:
                         loss[events[1][e].collection].append(
-                            {'url': events[1][e].url, 'loss': loss_percentage})
+                            {'url': events[1][e].url, 'loss': str("{:.2f}".format(loss_percentage))})
                     break
                 last_sold_price = events[1][e].price
     with open('loss.json', 'w') as output:
-        output.write(json.dumps(loss, cls=SetEncoder))
+        output.write(json.dumps(loss))
 
 
 if __name__ == '__main__':
