@@ -47,6 +47,9 @@ def opensea_data(argv):
         sale_stats = defaultdict(lambda: defaultdict(int))  # funky eh?
         for e in range(0, len(asset_events)):
             if asset_events[e].event_type == 'successful':
+                if asset_events[e].price == 0.0:
+                    # sales for nothing do no count as loss, as they are equivalent to transfer to another wallet
+                    continue
                 if asset_events[e].winner and asset_events[e].winner != '':
                     if asset_events[e].winner != NullAddress:
                         sale_stats[asset_events[e].winner]['bought'] += asset_events[e].price
