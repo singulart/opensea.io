@@ -10,6 +10,10 @@ from decimal import Decimal as D
 # only report seller losses greater than this percentage
 loss_threshold = 60
 
+# there is a glitch in opensea showing 'wrapping' operation as 0.0 sale to Null Address
+# see https://opensea.io/assets/0xb47e3cd837ddf8e4c57f05d70ab865de6e193bbb/9245
+NullAddress = 'NullAddress'
+
 nft_activity = RandomDict(defaultdict(list))
 loss = defaultdict(list)
 encoder.FLOAT_REPR = lambda o: format(o, '.2f')
@@ -39,20 +43,15 @@ def opensea_data(argv):
     print("query took %d s. fetched %d records" % ((datetime.now() - begin).microseconds / 1000, len(nft_activity.values)))
 
     for events in nft_activity.values:
-        last_sold_price = 0.0
         asset_events = events[1]
         sale_stats = defaultdict(lambda: defaultdict(int))  # funky eh?
         for e in range(0, len(asset_events)):
             if asset_events[e].event_type == 'successful':
-                if asset_events[e].seller and asset_events[e].seller != '':
-                    sale_stats[asset_events[e].seller]['sold'] += asset_events[e].price
                 if asset_events[e].winner and asset_events[e].winner != '':
-                    sale_stats[asset_events[e].winner]['bought'] += asset_events[e].price
-
-                # if 0 < asset_events[e].price < last_sold_price:
-                #     loss_percentage = 100 - asset_events[e].price / last_sold_price * 100
-                #     break
-                # last_sold_price = events[1][e].price
+                    if asset_events[e].winner != NullAddress:
+                        sale_stats[asset_events[e].winner]['bought'] += asset_events[e].price
+                        if asset_events[e].seller and asset_events[e].seller != '':
+                            sale_stats[asset_events[e].seller]['sold'] += asset_events[e].price
         for k, v in sale_stats.items():
             if 'sold' in v.keys() and 'bought' in v.keys() and v['sold'] < v['bought']:
                 loss_percentage = 100 - v['sold'] / v['bought'] * 100
