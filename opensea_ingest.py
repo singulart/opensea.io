@@ -38,11 +38,16 @@ def ingest_nft_event(jjj, i, asset_type, coingecko):
         jjj['asset_events'][i]['ending_price'], str) else None
     starting_price = float(jjj['asset_events'][i]['starting_price']) / eth if isinstance(
         jjj['asset_events'][i]['starting_price'], str) else None
-    owner = ''
-    if 'owner' in jjj['asset_events'][i][asset_type] and 'user' in jjj['asset_events'][i][asset_type]['owner']:
-        user = jjj['asset_events'][i][asset_type]['owner']['user']
+    seller = ''
+    if 'seller' in jjj['asset_events'][i] and jjj['asset_events'][i]['seller'] and 'user' in jjj['asset_events'][i]['seller']:
+        user = jjj['asset_events'][i]['seller']['user']
         if user:
-            owner = jjj['asset_events'][i][asset_type]['owner']['user']['username']
+            seller = jjj['asset_events'][i]['seller']['user']['username']
+    winner = ''
+    if 'winner_account' in jjj['asset_events'][i] and jjj['asset_events'][i]['winner_account'] and 'user' in jjj['asset_events'][i]['winner_account']:
+        user = jjj['asset_events'][i]['winner_account']['user']
+        if user:
+            winner = jjj['asset_events'][i]['winner_account']['user']['username']
 
     # the following code checks if the token was listed in other coins (not ETH) and tries to convert the price
     # (the conversion is not accurate because it is done using CoinGecko data as of today
@@ -90,9 +95,10 @@ def ingest_nft_event(jjj, i, asset_type, coingecko):
             when=when,
             num_sales=jjj['asset_events'][i][asset_type]['num_sales'],
             collection=jjj['asset_events'][i][asset_type]['collection']['slug'],
-            owner=owner
+            seller=seller,
+            winner=winner
         )
-    except IntegrityError:
+    except IntegrityError as a:
         print("Event %s already added" % jjj['asset_events'][i]['id'])
 
     return True

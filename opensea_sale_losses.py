@@ -8,7 +8,7 @@ import json
 from decimal import Decimal as D
 
 # only report seller losses greater than this percentage
-loss_threshold = 20
+loss_threshold = 60
 
 nft_activity = RandomDict(defaultdict(list))
 loss = defaultdict(list)

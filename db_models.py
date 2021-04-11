@@ -13,7 +13,8 @@ class OpenseaEvent(Model):
     url = CharField()
     num_sales = CharField()
     collection = CharField(index=True)
-    owner = CharField
+    seller = CharField(null=True)
+    winner = CharField(null=True)
 
     class Meta:
         database = db
