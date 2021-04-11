@@ -40,15 +40,26 @@ def opensea_data(argv):
 
     for events in nft_activity.values:
         last_sold_price = 0.0
-        for e in range(0, len(events[1])):
-            if events[1][e].event_type == 'successful':
-                if 0 < events[1][e].price < last_sold_price:
-                    loss_percentage = 100 - events[1][e].price / last_sold_price * 100
-                    if loss_percentage >= loss_threshold:
-                        loss[events[1][e].collection].append(
-                            {'url': events[1][e].url, 'loss': str("{:.2f}".format(loss_percentage))})
-                    break
-                last_sold_price = events[1][e].price
+        asset_events = events[1]
+        sale_stats = defaultdict(lambda: defaultdict(int))  # funky eh?
+        for e in range(0, len(asset_events)):
+            if asset_events[e].event_type == 'successful':
+                if asset_events[e].seller and asset_events[e].seller != '':
+                    sale_stats[asset_events[e].seller]['sold'] += asset_events[e].price
+                if asset_events[e].winner and asset_events[e].winner != '':
+                    sale_stats[asset_events[e].winner]['bought'] += asset_events[e].price
+
+                # if 0 < asset_events[e].price < last_sold_price:
+                #     loss_percentage = 100 - asset_events[e].price / last_sold_price * 100
+                #     break
+                # last_sold_price = events[1][e].price
+        for k, v in sale_stats.items():
+            if 'sold' in v.keys() and 'bought' in v.keys() and v['sold'] < v['bought']:
+                loss_percentage = 100 - v['sold'] / v['bought'] * 100
+                if loss_percentage >= loss_threshold:
+                    loss[asset_events[e].collection].append(
+                        {'url': asset_events[e].url, 'loss': str("{:.2f}".format(loss_percentage))})
+
     with open('loss.json', 'w') as output:
         output.write(json.dumps(loss))
 
